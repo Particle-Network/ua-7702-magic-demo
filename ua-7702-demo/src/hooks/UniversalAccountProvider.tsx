@@ -145,12 +145,14 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
       const auth = auths[0];
       console.log('[ensureDelegated] auth from Particle:', auth);
 
-      // Sign authorization with nonce+1 because the Type-4 tx itself
-      // consumes the current nonce. See reference example.
-      const currentNonce = auth.nonce;
-      // Use the actual target chainId (not auth.chainId which Particle
-      // always returns as 0). A chain-specific authorization is valid
-      // on that chain per EIP-7702.
+      // Fetch the actual on-chain nonce — Particle's getEIP7702Auth always
+      // returns nonce 0 regardless of account history.
+      const currentNonce = Number(await web3!.eth.getTransactionCount(userAddress!, 'pending'));
+
+      // Sign authorization with nonce+1: the Type-4 tx consumes the current
+      // nonce first, so the auth tuple must reference the post-increment nonce.
+      // Use the actual target chainId (not auth.chainId which Particle returns
+      // as 0). A chain-specific authorization is valid on that chain per EIP-7702.
       const signedAuth = await magic.wallet.sign7702Authorization({
         contractAddress: auth.address,
         chainId: chainId,
@@ -169,7 +171,7 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
     }
 
     console.log('[ensureDelegated] all delegations complete');
-  }, [universalAccount, magic]);
+  }, [universalAccount, magic, web3, userAddress]);
 
   const signAndSend = useCallback(
     async (transaction: { rootHash: string; userOps?: any[] } & Record<string, any>) => {
@@ -184,7 +186,10 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
       if (transaction.userOps) {
         for (const userOp of transaction.userOps) {
           if (userOp.eip7702Auth && !userOp.eip7702Delegated) {
-            const { chainId: targetChainId, address, nonce } = userOp.eip7702Auth;
+            const { address, nonce } = userOp.eip7702Auth;
+            // Particle returns eip7702Auth.chainId as 0 (chain-agnostic).
+            // Magic requires a non-zero chainId, so resolve from userOp.chainId first.
+            const targetChainId: number = userOp.chainId || userOp.eip7702Auth.chainId;
             const cacheKey = `${targetChainId}:${nonce}`;
             let sig = nonceMap.get(cacheKey);
             if (!sig) {
@@ -204,7 +209,8 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
         }
       }
 
-      const signature = await web3.eth.personal.sign(transaction.rootHash, userAddress, '');
+      const utf8Hex = web3.utils.utf8ToHex(transaction.rootHash);
+      const signature = await web3.eth.personal.sign(utf8Hex, userAddress, '');
       const result = await universalAccount.sendTransaction(
         transaction as any,
         signature,
