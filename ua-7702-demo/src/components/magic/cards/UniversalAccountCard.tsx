@@ -16,6 +16,7 @@ const UniversalAccountCard = () => {
   const {
     universalAccount,
     refreshBalance,
+    ensureDelegated,
     signAndSend,
     loading,
   } = useUniversalAccount();
@@ -29,6 +30,8 @@ const UniversalAccountCard = () => {
 
     setSending(true);
     try {
+      await ensureDelegated([42161]);
+
       const transaction = await universalAccount.createConvertTransaction({
         expectToken: { type: SUPPORTED_TOKEN_TYPE.USDC, amount },
         chainId: CHAIN_ID.ARBITRUM_MAINNET_ONE,
@@ -49,7 +52,7 @@ const UniversalAccountCard = () => {
     } finally {
       setSending(false);
     }
-  }, [universalAccount, amount, signAndSend, refreshBalance]);
+  }, [universalAccount, amount, ensureDelegated, signAndSend, refreshBalance]);
 
   if (loading) {
     return (

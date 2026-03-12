@@ -68,7 +68,7 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
       },
       tradeConfig: {
         slippageBps: 100,
-        universalGas: true,
+        universalGas: false,
       },
     });
 
@@ -115,96 +115,84 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
     }
   }, [universalAccount]);
 
-  // Pre-delegate the EOA on all chains that need it via Type-4 transactions.
-  // This uses chain-specific auth (non-zero chainId) which Magic supports,
-  // bypassing the chainId 0 limitation in Magic's sign7702Authorization.
+  const signEip7702Auth = useCallback(
+    async (contractAddress: string, chainId: number, nonce?: number) => {
+      if (!magic) throw new Error('Magic not ready');
+      return magic.wallet.sign7702Authorization({
+        contractAddress,
+        chainId,
+        ...(nonce !== undefined && { nonce }),
+      });
+    },
+    [magic],
+  );
+
+  // Pre-delegate the EOA via Type-4 transactions on chains that need it.
+  // Magic SDK cannot sign EIP-7702 authorizations with chainId 0 (chain-agnostic),
+  // so we pre-delegate with chain-specific auth before creating UA transactions.
   const ensureDelegated = useCallback(async (chainIds?: number[]) => {
-    if (!universalAccount || !magic) {
+    if (!universalAccount || !magic || !userAddress) {
       throw new Error('Universal Account or wallet not ready');
     }
 
     const deployments = await universalAccount.getEIP7702Deployments();
-    console.log('[ensureDelegated] deployments:', deployments);
-
     let undelegated = deployments.filter((d: any) => !d.isDelegated);
-    if (chainIds && chainIds.length > 0) {
+    if (chainIds?.length) {
       undelegated = undelegated.filter((d: any) => chainIds.includes(d.chainId));
-    }
-    if (undelegated.length === 0) {
-      console.log('[ensureDelegated] target chains already delegated');
-      return;
     }
 
     for (const dep of undelegated) {
-      const chainId = dep.chainId;
-      console.log(`[ensureDelegated] delegating on chain ${chainId}...`);
+      await magic.evm.switchChain(dep.chainId);
 
-      await magic.evm.switchChain(chainId);
+      const [auth] = await universalAccount.getEIP7702Auth([dep.chainId]);
 
-      const auths = await universalAccount.getEIP7702Auth([chainId]);
-      const auth = auths[0];
-      console.log('[ensureDelegated] auth from Particle:', auth);
+      const authorization = await signEip7702Auth(auth.address, dep.chainId);
 
-      // Fetch the actual on-chain nonce — Particle's getEIP7702Auth always
-      // returns nonce 0 regardless of account history.
-      const currentNonce = Number(await web3!.eth.getTransactionCount(userAddress!, 'pending'));
-
-      // Sign authorization with nonce+1: the Type-4 tx consumes the current
-      // nonce first, so the auth tuple must reference the post-increment nonce.
-      // Use the actual target chainId (not auth.chainId which Particle returns
-      // as 0). A chain-specific authorization is valid on that chain per EIP-7702.
-      const signedAuth = await magic.wallet.sign7702Authorization({
-        contractAddress: auth.address,
-        chainId: chainId,
-        nonce: currentNonce + 1,
-      });
-      console.log('[ensureDelegated] signed auth:', signedAuth);
-
-      const { transactionHash } = await magic.wallet.send7702Transaction({
-        to: '0x0000000000000000000000000000000000000000',
-        value: '0x0',
+      await magic.wallet.send7702Transaction({
+        to: userAddress,
         data: '0x',
-        authorizationList: [signedAuth],
-        nonce: currentNonce,
+        authorizationList: [authorization],
       });
-      console.log(`[ensureDelegated] delegation tx on chain ${chainId}:`, transactionHash);
     }
-
-    console.log('[ensureDelegated] all delegations complete');
-  }, [universalAccount, magic, web3, userAddress]);
+  }, [universalAccount, magic, userAddress, signEip7702Auth]);
 
   const signAndSend = useCallback(
     async (transaction: { rootHash: string; userOps?: any[] } & Record<string, any>) => {
-      if (!universalAccount || !web3 || !userAddress || !magic) {
+      if (!universalAccount || !web3 || !userAddress) {
         throw new Error('Universal Account or wallet not ready');
       }
 
       type EIP7702Authorization = { userOpHash: string; signature: string };
       const authorizations: EIP7702Authorization[] = [];
-      const nonceMap = new Map<string, string>();
+      const nonceMap = new Map<number, string>();
 
       if (transaction.userOps) {
         for (const userOp of transaction.userOps) {
           if (userOp.eip7702Auth && !userOp.eip7702Delegated) {
-            const { address, nonce } = userOp.eip7702Auth;
-            // Particle returns eip7702Auth.chainId as 0 (chain-agnostic).
-            // Magic requires a non-zero chainId, so resolve from userOp.chainId first.
-            const targetChainId: number = userOp.chainId || userOp.eip7702Auth.chainId;
-            const cacheKey = `${targetChainId}:${nonce}`;
-            let sig = nonceMap.get(cacheKey);
-            if (!sig) {
-              if (targetChainId > 0) {
-                await magic.evm.switchChain(targetChainId);
-              }
-              const auth = await magic.wallet.sign7702Authorization({
-                contractAddress: address,
-                chainId: targetChainId,
-                nonce,
+            let signatureSerialized = nonceMap.get(userOp.eip7702Auth.nonce);
+
+            if (!signatureSerialized) {
+              const authorization = await signEip7702Auth(
+                userOp.eip7702Auth.address,
+                userOp.eip7702Auth.chainId || userOp.chainId,
+                userOp.eip7702Auth.nonce,
+              );
+
+              const sig = Signature.from({
+                r: authorization.r,
+                s: authorization.s,
+                v: authorization.v,
               });
-              sig = Signature.from({ v: auth.v, r: auth.r, s: auth.s }).serialized;
-              nonceMap.set(cacheKey, sig);
+              signatureSerialized = sig.serialized;
+              nonceMap.set(userOp.eip7702Auth.nonce, signatureSerialized);
             }
-            authorizations.push({ userOpHash: userOp.userOpHash, signature: sig });
+
+            if (signatureSerialized) {
+              authorizations.push({
+                userOpHash: userOp.userOpHash,
+                signature: signatureSerialized,
+              });
+            }
           }
         }
       }
@@ -218,7 +206,7 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
       );
       return result;
     },
-    [universalAccount, web3, userAddress, magic],
+    [universalAccount, web3, userAddress, signEip7702Auth],
   );
 
   const value = useMemo(
