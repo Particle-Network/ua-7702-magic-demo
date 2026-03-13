@@ -4,7 +4,6 @@ import {
   SUPPORTED_TOKEN_TYPE,
 } from '@particle-network/universal-account-sdk';
 import Card from '@/components/ui/Card';
-import CardHeader from '@/components/ui/CardHeader';
 import CardLabel from '@/components/ui/CardLabel';
 import Spinner from '@/components/ui/Spinner';
 import FormButton from '@/components/ui/FormButton';
@@ -15,8 +14,8 @@ import { useUniversalAccount } from '@/hooks/UniversalAccountProvider';
 const UniversalAccountCard = () => {
   const {
     universalAccount,
+    isDelegated,
     refreshBalance,
-    ensureDelegated,
     signAndSend,
     loading,
   } = useUniversalAccount();
@@ -30,11 +29,9 @@ const UniversalAccountCard = () => {
 
     setSending(true);
     try {
-      await ensureDelegated([42161]);
-
       const transaction = await universalAccount.createConvertTransaction({
         expectToken: { type: SUPPORTED_TOKEN_TYPE.USDC, amount },
-        chainId: CHAIN_ID.ARBITRUM_MAINNET_ONE,
+        chainId: CHAIN_ID.SOLANA_MAINNET,
       });
 
       const result = await signAndSend(transaction);
@@ -52,13 +49,12 @@ const UniversalAccountCard = () => {
     } finally {
       setSending(false);
     }
-  }, [universalAccount, amount, ensureDelegated, signAndSend, refreshBalance]);
+  }, [universalAccount, amount, signAndSend, refreshBalance]);
 
   if (loading) {
     return (
       <Card>
-        <CardHeader id="convert">Convert to USDC</CardHeader>
-        <div className="flex items-center justify-center py-4">
+        <div className="flex items-center justify-center py-3">
           <Spinner />
         </div>
       </Card>
@@ -67,28 +63,32 @@ const UniversalAccountCard = () => {
 
   return (
     <Card>
-      <CardHeader id="convert">Convert to USDC</CardHeader>
-      <CardLabel leftHeader="Convert primary assets to USDC on Arbitrum" />
+      <CardLabel leftHeader="USDC to receive on Solana" />
       <FormInput
         value={amount}
         onChange={(e: any) => setAmount(e.target.value)}
-        placeholder="Amount of USDC"
+        placeholder="USDC amount"
       />
       <FormButton
         onClick={handleConvert}
-        disabled={sending || !universalAccount || !amount}
+        disabled={sending || !universalAccount || !amount || !isDelegated}
       >
-        {sending ? 'Converting...' : 'Convert to USDC'}
+        {sending ? 'Converting...' : `Convert ${amount || '0'} USDC to Solana`}
       </FormButton>
+      {!isDelegated && (
+        <p className="text-text-muted text-[11px] mt-1.5">
+          Delegate your EOA first (Step 2).
+        </p>
+      )}
 
       {txUrl && (
-        <div className="mt-4">
-          <p className="text-text-muted text-xs mb-1">Transaction:</p>
+        <div className="mt-3">
+          <p className="text-text-muted text-[11px] mb-1">Transaction:</p>
           <a
             href={txUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-brand text-xs font-mono break-all cursor-pointer hover:underline"
+            className="text-brand text-[11px] font-mono break-all cursor-pointer hover:underline"
           >
             {txUrl}
           </a>

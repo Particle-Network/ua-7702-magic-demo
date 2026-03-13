@@ -35,7 +35,7 @@ const EmailOTP = ({ token, setToken }: LoginProps) => {
         saveUserInfo(token, 'EMAIL', publicAddress);
         setEmail('');
       } catch (e) {
-        console.log('login error: ' + JSON.stringify(e));
+        console.error('login error:', e);
         if (e instanceof MagicRPCError) {
           switch (e.code) {
           case RPCErrorCode.MagicLinkFailedVerification:

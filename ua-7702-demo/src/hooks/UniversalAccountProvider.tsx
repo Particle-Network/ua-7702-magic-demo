@@ -3,10 +3,11 @@ import {
   UNIVERSAL_ACCOUNT_VERSION,
   type IAssetsResponse,
 } from '@particle-network/universal-account-sdk';
-import { Signature } from 'ethers';
+import { BrowserProvider, getBytes, Signature } from 'ethers';
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useMagic } from './MagicProvider';
-import useWeb3 from './Web3';
+
+const ARBITRUM_CHAIN_ID = 42161;
 
 type AccountInfo = {
   ownerAddress: string;
@@ -18,8 +19,9 @@ type UAContextType = {
   universalAccount: UniversalAccount | null;
   accountInfo: AccountInfo;
   primaryAssets: IAssetsResponse | null;
+  isDelegated: boolean;
   refreshBalance: () => Promise<void>;
-  ensureDelegated: (chainIds?: number[]) => Promise<void>;
+  ensureDelegated: () => Promise<void>;
   signAndSend: (transaction: { rootHash: string } & Record<string, any>) => Promise<{ transactionId: string }>;
   loading: boolean;
 };
@@ -28,6 +30,7 @@ const UAContext = createContext<UAContextType>({
   universalAccount: null,
   accountInfo: { ownerAddress: '', evmSmartAccount: '', solanaSmartAccount: '' },
   primaryAssets: null,
+  isDelegated: false,
   refreshBalance: async () => {},
   ensureDelegated: async () => {},
   signAndSend: async () => ({ transactionId: '' }),
@@ -38,7 +41,6 @@ export const useUniversalAccount = () => useContext(UAContext);
 
 export const UniversalAccountProvider = ({ children }: { children: ReactNode }) => {
   const { magic } = useMagic();
-  const web3 = useWeb3();
   const [universalAccount, setUniversalAccount] = useState<UniversalAccount | null>(null);
   const [accountInfo, setAccountInfo] = useState<AccountInfo>({
     ownerAddress: '',
@@ -46,6 +48,7 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
     solanaSmartAccount: '',
   });
   const [primaryAssets, setPrimaryAssets] = useState<IAssetsResponse | null>(null);
+  const [isDelegated, setIsDelegated] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const userAddress = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
@@ -67,13 +70,20 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
         ownerAddress: userAddress,
       },
       tradeConfig: {
-        slippageBps: 100,
+        slippageBps: 100, // 1% slippage tolerance
         universalGas: false,
       },
     });
 
     setUniversalAccount(ua);
   }, [userAddress]);
+
+  const refreshDelegationStatus = useCallback(async () => {
+    if (!universalAccount) return;
+    const deployments = await universalAccount.getEIP7702Deployments();
+    const arb = deployments.find((d: any) => d.chainId === ARBITRUM_CHAIN_ID);
+    setIsDelegated((arb as any)?.isDelegated ?? false);
+  }, [universalAccount]);
 
   useEffect(() => {
     if (!universalAccount || !userAddress) return;
@@ -87,13 +97,10 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
           evmSmartAccount: options.smartAccountAddress || '',
           solanaSmartAccount: options.solanaSmartAccountAddress || '',
         });
-        console.log('smartAccountOptions', options);
 
-        const deployments = await universalAccount.getEIP7702Deployments();
-        console.log('[UA] EIP-7702 deployments:', deployments);
+        await refreshDelegationStatus();
 
         const assets = await universalAccount.getPrimaryAssets();
-        console.log('assets', assets);
         setPrimaryAssets(assets);
       } catch (err) {
         console.error('Failed to fetch UA data:', err);
@@ -103,7 +110,7 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
     };
 
     fetchAccountData();
-  }, [universalAccount, userAddress]);
+  }, [universalAccount, userAddress, refreshDelegationStatus]);
 
   const refreshBalance = useCallback(async () => {
     if (!universalAccount) return;
@@ -127,38 +134,38 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
     [magic],
   );
 
-  // Pre-delegate the EOA via Type-4 transactions on chains that need it.
+  // Pre-delegate the EOA on Arbitrum via a Type-4 transaction.
   // Magic SDK cannot sign EIP-7702 authorizations with chainId 0 (chain-agnostic),
   // so we pre-delegate with chain-specific auth before creating UA transactions.
-  const ensureDelegated = useCallback(async (chainIds?: number[]) => {
+  const ensureDelegated = useCallback(async () => {
     if (!universalAccount || !magic || !userAddress) {
       throw new Error('Universal Account or wallet not ready');
     }
 
     const deployments = await universalAccount.getEIP7702Deployments();
-    let undelegated = deployments.filter((d: any) => !d.isDelegated);
-    if (chainIds?.length) {
-      undelegated = undelegated.filter((d: any) => chainIds.includes(d.chainId));
+    const arb = deployments.find((d: any) => d.chainId === ARBITRUM_CHAIN_ID);
+    if (!arb || (arb as any).isDelegated) {
+      await refreshDelegationStatus();
+      return;
     }
 
-    for (const dep of undelegated) {
-      await magic.evm.switchChain(dep.chainId);
+    await magic.evm.switchChain(ARBITRUM_CHAIN_ID);
 
-      const [auth] = await universalAccount.getEIP7702Auth([dep.chainId]);
+    const [auth] = await universalAccount.getEIP7702Auth([ARBITRUM_CHAIN_ID]);
+    const authorization = await signEip7702Auth(auth.address, ARBITRUM_CHAIN_ID, auth.nonce + 1);
 
-      const authorization = await signEip7702Auth(auth.address, dep.chainId);
+    await magic.wallet.send7702Transaction({
+      to: userAddress,
+      data: '0x',
+      authorizationList: [authorization],
+    });
 
-      await magic.wallet.send7702Transaction({
-        to: userAddress,
-        data: '0x',
-        authorizationList: [authorization],
-      });
-    }
-  }, [universalAccount, magic, userAddress, signEip7702Auth]);
+    await refreshDelegationStatus();
+  }, [universalAccount, magic, userAddress, signEip7702Auth, refreshDelegationStatus]);
 
   const signAndSend = useCallback(
     async (transaction: { rootHash: string; userOps?: any[] } & Record<string, any>) => {
-      if (!universalAccount || !web3 || !userAddress) {
+      if (!universalAccount || !magic || !userAddress) {
         throw new Error('Universal Account or wallet not ready');
       }
 
@@ -197,8 +204,9 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
         }
       }
 
-      const utf8Hex = web3.utils.utf8ToHex(transaction.rootHash);
-      const signature = await web3.eth.personal.sign(utf8Hex, userAddress, '');
+      const provider = new BrowserProvider((magic as any).rpcProvider);
+      const signer = await provider.getSigner();
+      const signature = await signer.signMessage(getBytes(transaction.rootHash));
       const result = await universalAccount.sendTransaction(
         transaction as any,
         signature,
@@ -206,7 +214,7 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
       );
       return result;
     },
-    [universalAccount, web3, userAddress, signEip7702Auth],
+    [universalAccount, magic, userAddress, signEip7702Auth],
   );
 
   const value = useMemo(
@@ -214,12 +222,13 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
       universalAccount,
       accountInfo,
       primaryAssets,
+      isDelegated,
       refreshBalance,
       ensureDelegated,
       signAndSend,
       loading,
     }),
-    [universalAccount, accountInfo, primaryAssets, refreshBalance, ensureDelegated, signAndSend, loading],
+    [universalAccount, accountInfo, primaryAssets, isDelegated, refreshBalance, ensureDelegated, signAndSend, loading],
   );
 
   return <UAContext.Provider value={value}>{children}</UAContext.Provider>;

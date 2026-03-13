@@ -1,91 +1,154 @@
-This scaffold is meant to help you bootstrap your own projects with Magic's [Dedicated Wallet](https://magic.link/docs/auth/overview). Magic is a developer SDK that integrates with your application to enable passwordless Web3 onboarding.
+# EIP-7702 Universal Account Demo
 
-The folder structure of this scaffold is designed to encapsulate all things Magic into one place so you can easily add or remove components and functionality. For example, all Magic-specific components are in the `src/components/magic` directory while generic UI components are in the `src/components/ui` directory.
+A working demo that turns an **embedded EOA wallet** (Magic) into a **Particle Network Universal Account** using [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) delegation -- then executes a cross-chain conversion in a single transaction.
 
-## Usage
+## What This Demo Shows
 
-This project uses Next.js but relies on fairly standard React components and hooks. Magic-related components are in the `/src/components/magic` directory, all other UI components are in the `/src/components/ui` directory, utility functions are in `/src/utils` and hooks are in the `/src/hooks` directory.
+### The problem
 
-Use this project as a reference for how to use this template or implement Magic in your own project. Key areas to look at include:
+Traditional EOA wallets are limited to the chain they live on. If a user has ETH on Arbitrum and wants USDC on Solana, they need to bridge, swap, and manage gas on multiple chains manually.
 
-### Custom Hooks
-In the `/src/hooks` directory, the `MagicProvider` hook sets up and provides a Magic instance for using the Magic SDK and OAuth extension. Additionally, the `Web3.tsx` hook initializes and provides a Web3 instance using the Magic provider.
+### The solution: EIP-7702 + Universal Accounts
 
-### Login Functionality 
-The `Login.tsx` component, located in `/src/components/magic`, manages the display and functionality of various login methods on the login page. It is a central piece for handling user authentication.
+EIP-7702 lets an EOA delegate its execution to a smart contract **without deploying a new account**. The EOA keeps its address and assets, but gains smart account capabilities. Particle's Universal Account SDK uses this to give any EOA **chain-abstracted** powers: a unified balance across EVM chains and Solana, and the ability to move assets cross-chain in one step.
 
-One thing to note is that whenever `getInfo` is called from any of the authentication providers, the user session is rehydrated.
+### The three-step flow
 
-Here is a list of the available authentication methods:
-- `Discord.tsx` - Handles authentication using Discord OAuth.
-- `Facebook.tsx` - Handles authentication using Facebook OAuth.
-- `Google.tsx` - Handles authentication using Google OAuth.
-- `Twitch.tsx` - Handles authentication using Twitch OAuth.
-- `EmailOTP.tsx` - Handles authentication using email one-time password (OTP).
-- `Github.tsx` - Handles authentication using GitHub OAuth.
-- `SMSOTP.tsx` - Handles authentication using SMS one-time password (OTP).
-- `Twitter.tsx` - Handles authentication using Twitter OAuth.
-
-### User Interaction Components
-
-- `/src/components/magic/auth`: This contains all of the authentication methods.
-
-- `/src/components/magic/cards`: The `SendTransactionCard.tsx` component facilitate transaction processes, `UserInfoCard.tsx` displays user information, `WalletMethodsCard.tsx` manages authentication tokens and user metadata and `SmartContract.tsx` interacts with a basic storage contract. 
-
-- `/src/components/magic/wallet-methods`: This directory includes several components that provide specific functionalities:
-    - `Disconnect.tsx` handles the disconnection of the user's session from the application.
-    - `GetIdToken.tsx` retrieves the ID token for the authenticated user.
-    - `GetMetadata.tsx` retrieves metadata information about the authenticated user. This will rehydrate the user session every time it is rendered. It does this when calling the `getInfo` function. The user session is rehydrated whenever `getInfo` is invoked
-    - `UpdateEmail.tsx` allows the user to update their email address.
-
-### Utility Functions
-The `/src/utils` directory includes utility files that support various aspects of the application:
-- `common.ts` manages user authentication processes. The `logout` function handle the process of logging out a user and clearing their authentication data, while `saveUserInfo` saves the user's token, login method, and address to local storage.
-- `network.ts` defines network configurations and utilities, such as URLs, chain IDs, tokens, and block explorer links.
-- `showToast.ts` handles customizable toast notifications.
-- `smartContract.ts` contains functions and configurations for interacting with smart contracts, such as retrieving contract IDs, determining testnet status, generating hash links, and defining contract ABIs.
-
-These utilities are essential for supporting various aspects of the application.
-
-### UI Components
-The `/src/components/ui` directory contains reusable UI components for building the user interface. This includes components for creating and styling cards (`Card`, `CardHeader`, `CardLabel`), layout elements for the dashboard (`Dashboard`), separators (`Divider`), error messages (`ErrorText`), form elements (`FormButton`, `FormInput`), redirection handling within the Magic dashboard (`MagicDashboardRedirect`), spacing elements (`Spacer`), loading indicators (`Spinner`), and displaying transaction history (`TransactionHistory`).
-## Next.js
-
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
-
-### Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. LOGIN                                                           │
+│     User authenticates with email (Magic SDK)                       │
+│     → Magic creates an embedded EOA on Arbitrum                     │
+│     → User deposits ETH to fund the account                        │
+├─────────────────────────────────────────────────────────────────────┤
+│  2. DELEGATE (EIP-7702)                                             │
+│     User clicks "Delegate on Arbitrum"                              │
+│     → Signs a 7702 authorization (contract + chainId + nonce)       │
+│     → Sends a Type-4 transaction with the authorization             │
+│     → EOA now executes via Particle's Universal Account contract    │
+│     → Same address, same keys, but now a smart account              │
+├─────────────────────────────────────────────────────────────────────┤
+│  3. CONVERT CROSS-CHAIN                                             │
+│     User specifies "X USDC on Solana"                               │
+│     → UA SDK builds the transaction (routing, bridging, swapping)   │
+│     → User signs the rootHash + any inline 7702 authorizations      │
+│     → Single sendTransaction() call handles everything              │
+│     → ETH on Arbitrum becomes USDC on Solana                        │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How EIP-7702 Delegation Works
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+EIP-7702 introduces a new transaction type (Type-4) that sets an EOA's `code` field to point to a smart contract. After delegation:
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+- The EOA address stays the same
+- The private key still controls the account
+- But transactions execute through the delegated contract's logic
+- This is reversible -- the user can re-delegate or clear delegation
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+In this demo, delegation targets **Particle's Universal Account contract on Arbitrum**. Once delegated, the EOA can participate in Particle's chain-abstraction layer.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+### Delegation flow in code
 
-### Learn More
+```
+ensureDelegated()
+  → getEIP7702Deployments()          // Check which chains need delegation
+  → magic.evm.switchChain(42161)     // Switch to Arbitrum
+  → universalAccount.getEIP7702Auth([42161])  // Get contract address + nonce
+  → magic.wallet.sign7702Authorization(...)   // User signs the authorization
+  → magic.wallet.send7702Transaction(...)     // Send Type-4 tx with auth list
+  → refreshDelegationStatus()                 // Verify delegation succeeded
+```
 
-To learn more about Next.js, take a look at the following resources:
+Delegation is a **one-time operation per chain**. After this, the EOA natively acts as a Universal Account.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## How the Cross-Chain Convert Works
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+Once delegated, the Universal Account SDK can build complex cross-chain transactions. The user only needs to sign once:
 
-### Deploy on Vercel
+```
+handleConvert()
+  → universalAccount.createConvertTransaction({
+      expectToken: { type: USDC, amount },
+      chainId: SOLANA_MAINNET
+    })
+  → signAndSend(transaction)
+      → For each userOp with eip7702Auth:
+          sign7702Authorization → serialize signature
+      → ethers.BrowserProvider.personal_sign(rootHash)  // Single user signature
+      → universalAccount.sendTransaction()  // SDK handles routing + execution
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The SDK determines the optimal route (which chains to touch, which bridges/swaps to use) and packages everything into `userOps` that the Universal Account infrastructure executes. The user signs one `rootHash` that covers all operations.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## Quick Start
+
+```bash
+cp .env.example .env   # Fill in your keys (see below)
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_MAGIC_API_KEY` | Yes | Magic publishable key ([dashboard.magic.link](https://dashboard.magic.link)) |
+| `NEXT_PUBLIC_BLOCKCHAIN_NETWORK` | Yes | Target network name (`arbitrum`) |
+| `NEXT_PUBLIC_PROJECT_ID` | Yes | Particle project ID ([dashboard.particle.network](https://dashboard.particle.network)) |
+| `NEXT_PUBLIC_CLIENT_KEY` | Yes | Particle client key |
+| `NEXT_PUBLIC_APP_ID` | Yes | Particle app UUID |
+| `NEXT_PUBLIC_ARB_RPC_URL` | Recommended | Arbitrum RPC URL (falls back to public RPC) |
+| `NEXT_PUBLIC_ETH_RPC_URL` | No | Ethereum Mainnet RPC (only if enabling ETH support) |
+
+## Project Structure
+
+```
+src/
+├── pages/
+│   ├── _app.tsx                    # App wrapper
+│   ├── _document.tsx               # HTML document
+│   └── index.tsx                   # Entry — renders Login or Dashboard
+├── hooks/
+│   ├── MagicProvider.tsx           # Magic SDK instance + auth state
+│   └── UniversalAccountProvider.tsx  # UA SDK: init, delegation, sign+send
+├── components/
+│   ├── magic/
+│   │   ├── Login.tsx               # Login page (Email OTP)
+│   │   ├── auth/
+│   │   │   └── EmailOTP.tsx        # Email OTP handler
+│   │   └── cards/
+│   │       ├── UserInfoCard.tsx    # Wallet addresses + unified balance
+│   │       ├── DelegationCard.tsx  # EIP-7702 delegation status + trigger
+│   │       └── UniversalAccountCard.tsx  # Cross-chain convert form
+│   └── ui/                         # Reusable primitives (Card, Spinner, etc.)
+├── utils/
+│   ├── common.ts                   # Auth helpers (logout, saveUserInfo)
+│   ├── showToast.ts                # Toast notifications
+│   └── types.ts                    # Shared TypeScript types
+└── styles/
+    └── globals.css                 # Global styles + Tailwind
+```
+
+## Key Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `magic-sdk` + `@magic-ext/evm` | Auth + embedded wallet + EIP-7702 signing |
+| `@particle-network/universal-account-sdk` | Universal Account creation, balance, transactions |
+| `ethers` | Signature serialization (`Signature.from`) + `personal_sign` via BrowserProvider |
+| `next` (13.4) | Framework (Pages Router) |
+
+## Known Issues
+
+- Magic SDK cannot sign EIP-7702 authorizations with `chainId: 0` (chain-agnostic). The workaround is pre-delegating with chain-specific auth before creating UA transactions.
+- AA24 signature error when combining delegation + transaction in one step (mitigated with split flow).
+
+## Resources
+
+- [Universal Accounts Docs](https://developers.particle.network/universal-accounts/cha/overview)
+- [EIP-7702 Specification](https://eips.ethereum.org/EIPS/eip-7702)
+- [Magic EIP-7702 Docs](https://docs.magic.link/embedded-wallets/blockchain-interactions/eip-7702)
+- [Magic SDK Reference](https://docs.magic.link)

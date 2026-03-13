@@ -25,15 +25,44 @@ a {
 }
 
 .dashboard-content {
-  @apply flex-1 w-full max-w-5xl mx-auto grid gap-6 p-6 pt-8;
-  grid-template-columns: 1fr 1fr;
-  align-content: start;
+  @apply flex-1 w-full max-w-lg mx-auto flex flex-col px-4 py-6;
 }
 
-@media (max-width: 768px) {
-  .dashboard-content {
-    grid-template-columns: 1fr;
-  }
+/* ── Stepper ────────────────────────────────────── */
+
+.step-wrapper {
+  @apply flex;
+}
+
+.step-gutter {
+  @apply flex flex-col items-center mr-4 flex-shrink-0;
+}
+
+.step-dot {
+  @apply w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0;
+  background: rgba(104, 81, 255, 0.15);
+  color: #a594ff;
+  border: 1px solid rgba(104, 81, 255, 0.3);
+}
+
+.step-line {
+  @apply w-px flex-1;
+  background: rgba(42, 42, 54, 0.8);
+  min-height: 16px;
+}
+
+.step-body {
+  @apply flex-1 pb-5 min-w-0;
+}
+
+.step-title {
+  @apply text-xs font-semibold uppercase tracking-wider mb-0.5;
+  color: #a594ff;
+  line-height: 28px; /* align with .step-dot height */
+}
+
+.step-desc {
+  @apply text-text-muted text-[11px] leading-relaxed mb-2 mt-0;
 }
 
 /* ── Top bar ─────────────────────────────────────── */
@@ -87,7 +116,7 @@ a {
 /* ── Cards ───────────────────────────────────────── */
 
 .card {
-  @apply flex flex-col p-6 rounded-2xl transition-all duration-300;
+  @apply flex flex-col p-4 rounded-xl transition-all duration-300;
   background: #141419;
   border: 1px solid #2a2a36;
 }
@@ -98,21 +127,21 @@ a {
 }
 
 .card-header {
-  @apply text-lg font-semibold text-text-primary mt-0 mb-5;
+  @apply text-base font-semibold text-text-primary mt-0 mb-3;
 }
 
 .card-label-container {
-  @apply flex items-center justify-between mb-2.5;
+  @apply flex items-center justify-between mb-1.5;
 }
 
 .card-label {
-  @apply text-sm font-medium text-text-secondary;
+  @apply text-xs font-medium text-text-secondary;
 }
 
 /* ── Code / monospace blocks ─────────────────────── */
 
 .code {
-  @apply text-sm text-text-primary p-3 rounded-lg font-mono;
+  @apply text-xs text-text-primary px-3 py-2 rounded-lg font-mono;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(42, 42, 54, 0.6);
   word-wrap: break-word;
@@ -121,14 +150,14 @@ a {
 /* ── Divider ─────────────────────────────────────── */
 
 .divider {
-  @apply my-4;
+  @apply my-3;
   border-bottom: 1px solid rgba(42, 42, 54, 0.8);
 }
 
 /* ── Form elements ───────────────────────────────── */
 
 .form-input {
-  @apply box-border flex flex-row items-center w-full h-12 text-sm text-text-primary mb-3 px-4 py-3 rounded-xl transition-all duration-200;
+  @apply box-border flex flex-row items-center w-full h-10 text-sm text-text-primary mb-2 px-3 py-2 rounded-lg transition-all duration-200;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid #2a2a36;
   font-family: 'Inter', sans-serif;
@@ -145,7 +174,7 @@ a {
 }
 
 .form-button {
-  @apply flex flex-row justify-center items-center w-full h-12 font-semibold text-sm leading-6 transition-all duration-200 px-6 py-3 rounded-xl border-none cursor-pointer;
+  @apply flex flex-row justify-center items-center w-full h-10 font-semibold text-sm leading-6 transition-all duration-200 px-4 py-2 rounded-lg border-none cursor-pointer;
   background: #6851ff;
   color: #fff;
 }
@@ -168,7 +197,7 @@ a {
 /* ── Action / interactive labels ─────────────────── */
 
 .action-button {
-  @apply font-medium text-brand cursor-pointer transition-all duration-200 text-sm;
+  @apply font-medium text-brand cursor-pointer transition-all duration-200 text-xs;
 }
 
 .action-button:hover {

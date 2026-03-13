@@ -5,15 +5,4 @@ export type LoginProps = {
   setToken: Dispatch<SetStateAction<string>>
 }
 
-export type TxnParams = {
-  from: string | null;
-  to: string | null;
-  value: string;
-  maxFeePerGas?: bigint;
-  maxPriorityFeePerGas?: bigint;
-  gasPrice?: string;
-};
-
-
-
 export type { Magic } from '../hooks/MagicProvider'
