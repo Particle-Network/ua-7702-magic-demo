@@ -21,7 +21,7 @@ const DelegationCard = () => {
     setDelegating(true);
     try {
       await ensureDelegated();
-      showToast({ message: 'Delegation on Arbitrum succeeded!', type: 'success' });
+      showToast({ message: 'Delegation on Base succeeded!', type: 'success' });
     } catch (err: any) {
       console.error('Delegation failed:', err);
       showToast({
@@ -46,7 +46,7 @@ const DelegationCard = () => {
   return (
     <Card>
       <div className="code" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>Arbitrum (42161)</span>
+        <span>Base (8453)</span>
         <span style={{ color: isDelegated ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
           {isDelegated ? 'Delegated' : 'Not delegated'}
         </span>
@@ -57,7 +57,7 @@ const DelegationCard = () => {
           onClick={handleDelegate}
           disabled={delegating || !universalAccount}
         >
-          {delegating ? 'Delegating...' : 'Delegate on Arbitrum'}
+          {delegating ? 'Delegating...' : 'Delegate on Base'}
         </FormButton>
       )}
     </Card>

@@ -33,21 +33,21 @@ export default function Dashboard({ token, setToken }: LoginProps) {
         <Step
           step={1}
           title="Email Login"
-          description="Magic creates an EOA wallet from an email login. Deposit ETH on Arbitrum to your address to fund the account."
+          description="Magic creates an EOA wallet from an email login. Deposit ETH on Base to your address to fund the account."
         >
           <UserInfo />
         </Step>
         <Step
           step={2}
           title="Upgrade EOA to Universal Account"
-          description="Use EIP-7702 to delegate the Magic EOA on Arbitrum, upgrading it to a Particle Universal Account with chain abstraction."
+          description="Use EIP-7702 to delegate the Magic EOA on Base, upgrading it to a Particle Universal Account with chain abstraction."
         >
           <DelegationCard />
         </Step>
         <Step
           step={3}
           title="Convert Assets Cross-Chain"
-          description="With the EOA upgraded, use the Universal Account to convert your Arbitrum ETH into USDC on Solana in a single transaction."
+          description="With the EOA upgraded, use the Universal Account to convert your Base ETH into USDC on Solana in a single transaction."
           isLast
         >
           <UniversalAccountCard />

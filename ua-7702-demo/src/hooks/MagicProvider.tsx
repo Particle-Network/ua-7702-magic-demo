@@ -22,7 +22,7 @@ const MagicProvider = ({ children }: { children: ReactNode }) => {
       const magic = new MagicBase(process.env.NEXT_PUBLIC_MAGIC_API_KEY as string, {
         extensions: [
           new EVMExtension([
-            { rpcUrl: process.env.NEXT_PUBLIC_ARB_RPC_URL || 'https://arb1.arbitrum.io/rpc', chainId: 42161, default: true },
+            { rpcUrl: process.env.NEXT_PUBLIC_BASE_RPC_URL || 'https://mainnet.base.org', chainId: 8453, default: true },
           ]),
         ],
       });

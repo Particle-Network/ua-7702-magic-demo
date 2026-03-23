@@ -7,7 +7,7 @@ import { BrowserProvider, getBytes, Signature } from 'ethers';
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useMagic } from './MagicProvider';
 
-const ARBITRUM_CHAIN_ID = 42161;
+const BASE_CHAIN_ID = 8453;
 
 type AccountInfo = {
   ownerAddress: string;
@@ -81,8 +81,8 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
   const refreshDelegationStatus = useCallback(async () => {
     if (!universalAccount) return;
     const deployments = await universalAccount.getEIP7702Deployments();
-    const arb = deployments.find((d: any) => d.chainId === ARBITRUM_CHAIN_ID);
-    setIsDelegated((arb as any)?.isDelegated ?? false);
+    const base = deployments.find((d: any) => d.chainId === BASE_CHAIN_ID);
+    setIsDelegated((base as any)?.isDelegated ?? false);
   }, [universalAccount]);
 
   useEffect(() => {
@@ -134,7 +134,7 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
     [magic],
   );
 
-  // Pre-delegate the EOA on Arbitrum via a Type-4 transaction.
+  // Pre-delegate the EOA on Base via a Type-4 transaction.
   // Magic SDK cannot sign EIP-7702 authorizations with chainId 0 (chain-agnostic),
   // so we pre-delegate with chain-specific auth before creating UA transactions.
   const ensureDelegated = useCallback(async () => {
@@ -143,16 +143,16 @@ export const UniversalAccountProvider = ({ children }: { children: ReactNode }) 
     }
 
     const deployments = await universalAccount.getEIP7702Deployments();
-    const arb = deployments.find((d: any) => d.chainId === ARBITRUM_CHAIN_ID);
-    if (!arb || (arb as any).isDelegated) {
+    const base = deployments.find((d: any) => d.chainId === BASE_CHAIN_ID);
+    if (!base || (base as any).isDelegated) {
       await refreshDelegationStatus();
       return;
     }
 
-    await magic.evm.switchChain(ARBITRUM_CHAIN_ID);
+    await magic.evm.switchChain(BASE_CHAIN_ID);
 
-    const [auth] = await universalAccount.getEIP7702Auth([ARBITRUM_CHAIN_ID]);
-    const authorization = await signEip7702Auth(auth.address, ARBITRUM_CHAIN_ID, auth.nonce + 1);
+    const [auth] = await universalAccount.getEIP7702Auth([BASE_CHAIN_ID]);
+    const authorization = await signEip7702Auth(auth.address, BASE_CHAIN_ID, auth.nonce + 1);
 
     await magic.wallet.send7702Transaction({
       to: userAddress,
